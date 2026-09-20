@@ -1,6 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  EC2にはJava 17とsystemdサービスの雛形を用意しますが、Spring Bootのjar本体は別途手動配置が必要です。
 
 Parameters:
   ProjectName:
