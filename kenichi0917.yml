@@ -145,7 +145,6 @@ Resources:
 
   ##########################
   # Route Tables
-  # NATゲートウェイは作成しない(コスト削減)。
   # プライベートサブネットは外向き経路を持たない = インターネットから直接到達不可、かつ自身からも出て行けない。
   # RDSはEC2(パブリックサブネット)からのみVPC内部通信でアクセスする構成。
   ##########################
@@ -285,8 +284,7 @@ Resources:
           TargetGroupArn: !Ref ALBTargetGroup  #どこに？ TargetGroupArn で記載のグループに転送する。
 
   ##########################
-  # EC2 (Launch Template + Auto Scaling Group)
-  # コスト重視のためパブリックサブネットに配置(NATゲートウェイ不要)
+  # EC2 
   ##########################
   EC2Instance:
     Type: AWS::EC2::Instance
@@ -303,8 +301,16 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            # Java 17 (Amazon Corretto) をインストール
-            dnf install -y java-17-amazon-corretto-headless
+            # Java 21 (Amazon Corretto) をインストール
+            dnf install -y java-21-amazon-corretto-devel.x86_64
+            java -version
+
+            #Gitをインストール
+            dnf install -y git
+            git --version
+
+            #Githubからサンプルアプリをクローン
+            git clone https://github.com/koujienami/aws-study.git /opt/aws-study
 
             # アプリ配置用ディレクトリとユーザーを作成
             mkdir -p /opt/app
