@@ -277,6 +277,9 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 8080
 
   ALBListener:   #建物の受付カウンター(80番ポートのカウンター)
     Type: AWS::ElasticLoadBalancingV2::Listener
