@@ -220,13 +220,18 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: EC2  #EC2用 - ALBからの8080のみ許可
+      GroupDescription: EC2  #EC2用 - ALBからの8080許可,sshは自分のIPのみ許可
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 60.93.102.225/32
+
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-ec2-sg
