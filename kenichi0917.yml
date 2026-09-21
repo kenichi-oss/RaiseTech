@@ -298,49 +298,6 @@ Resources:
         Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-ec2
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            # Java 21 (Amazon Corretto) をインストール
-            dnf install -y java-21-amazon-corretto-devel.x86_64
-            java -version
-
-            #Gitをインストール
-            dnf install -y git
-            git --version
-
-            #Githubからサンプルアプリをクローン
-            git clone https://github.com/koujienami/aws-study.git /opt/aws-study
-
-            # アプリ配置用ディレクトリとユーザーを作成
-            mkdir -p /opt/app
-            useradd -r -s /sbin/nologin springboot || true
-            chown -R springboot:springboot /opt/app
-
-            # jarファイルは後で /opt/app/app.jar に手動配置してください
-            # (scp や S3, CodeDeploy などでアップロード後、systemctl start springboot)
-
-            # systemdサービスを定義(jar配置後、自動起動できるように雛形として用意)
-            cat <<'EOF' > /etc/systemd/system/springboot.service
-            [Unit]
-            Description=Spring Boot Application
-            After=network.target
-
-            [Service]
-            User=springboot
-            WorkingDirectory=/opt/app
-            ExecStart=/usr/bin/java -jar /opt/app/app.jar
-            SuccessExitStatus=143
-            Restart=on-failure
-
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-
-            systemctl daemon-reload
-            systemctl enable springboot
-            # jar配置後、下記コマンドで起動します:
-            #   systemctl start springboot
 
   ##########################
   # RDS(シングルAZ・単一インスタンス)
