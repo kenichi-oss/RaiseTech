@@ -306,7 +306,7 @@ Resources:
         Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-ec2
-
+　　　　　#次からはここにUserData を入れて、自動化した方が楽。
   ##########################
   # RDS(シングルAZ・単一インスタンス)
   ##########################
