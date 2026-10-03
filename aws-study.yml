@@ -580,7 +580,7 @@ Resources:
             }
           ]
         }
-   # Web ACLとロググループを紐付ける(これがないとログは出ない)
+   # Web ACLとロググループを紐付ける(これがないとログは出ない
   WafLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
