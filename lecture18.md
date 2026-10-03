@@ -34,7 +34,7 @@
 ![WAFのブロック前画像](images/WAFBlock.png)
 
 ### 4. WAF のルールでブロックされた後のリクエスト数。
-![WAFのブロック後画像](images/WAFBlockrequestafter.png)
+![WAFのブロック後画像](images/WAFBlock2.png)
 
 ### 5. CloudWatch logs にWAF でブロックされたリクエストが出力されている画面。
 ![CloudWatch logs画像](images/CloudWatch%20Log%20.png)
