@@ -1,0 +1,29 @@
+resource "aws_iam_role" "ssm" {
+  name = "${var.project_name}-ssm-role"
+
+  # EC2 だけがこのロールを引き受けられる
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+# CloudFormation の ManagedPolicyArns は、Terraform では1つずつ attachment にする
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ssm.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.ssm.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+resource "aws_iam_instance_profile" "ssm" {
+  name = "${var.project_name}-ssm-profile"
+  role = aws_iam_role.ssm.name
+}
