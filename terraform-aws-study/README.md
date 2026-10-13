@@ -13,14 +13,51 @@
    terraform plan
    terraform apply
 
-2. バケット名が一致していることを確認する
+   apply が終わったら、**必ず手順2(バケット名の確認と書き換え)に進んでください。**
 
-   - `backend-setup` が作成するバケット名: `tfstate-study-<AWS アカウント ID>`
-     (`bucket_prefix` の既定値 `tfstate-study` + アカウント ID)
-   - `envs/development/terraform.tf` の `backend "s3"` の `bucket` が、上記と同じであること
-   - `terraform output bucket_name` で、作成されたバケット名を確認できます
+### 2. バケット名を確認し、必要なら書き換える
 
-3. 環境を構築する(`envs/development`)
+> ⚠️ **注意(別の AWS アカウントで実行する場合は必須)**
+> `envs/development/terraform.tf` の `bucket` には、私のアカウント ID を含むバケット名を**固定で記載**しています
+> (backend ブロックには変数を使えないため)。
+> **別のアカウントでは、このままだと `terraform init` が失敗します。必ず次の手順で書き換えてください。**
+
+**① 作成されたバケット名を取得する**
+
+```bash
+cd backend-setup
+terraform output -raw bucket_name
+```
+
+`tfstate-study-<AWS アカウント ID>` の形式で表示されます。
+
+**② `envs/development/terraform.tf` の `bucket` を書き換える**
+
+エディタで、`backend "s3"` の `bucket` を、①で表示された値に書き換えます。
+
+```hcl
+backend "s3" {
+  bucket = "①で表示されたバケット名"
+  ...
+}
+```
+
+コマンドで書き換える場合(macOS)は、次のとおりです。
+
+```bash
+cd ..
+BUCKET=$(cd backend-setup && terraform output -raw bucket_name)
+sed -i '' "s|bucket *= *\".*\"|bucket       = \"${BUCKET}\"|" envs/development/terraform.tf
+grep -n "bucket" envs/development/terraform.tf    # 書き換わったか確認
+```
+
+Linux の場合は、`sed -i '' ...` を `sed -i ...` にしてください。
+
+**③ 同じ AWS アカウントで実行する場合**
+
+`terraform output` の値が、すでに `terraform.tf` の値と同じなら、書き換えは不要です。
+
+2. 環境を構築する(`envs/development`)
 
    cd ../envs/development
    terraform init
