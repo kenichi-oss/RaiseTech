@@ -1,0 +1,16 @@
+# Terraform の作業ディレクトリ
+.terraform/
+
+# tfstate(AWS の構築状態。パスワード等が平文で入ることがあります)
+*.tfstate
+*.tfstate.*
+
+# 変数ファイル(DB パスワードなどの秘密情報)
+*.tfvars
+*.tfvars.json
+
+# クラッシュログ
+crash.log
+
+# Mac が自動で作るファイル
+.DS_Store
