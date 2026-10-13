@@ -80,3 +80,9 @@ Linux の場合は、`sed -i '' ...` を `sed -i ...` にしてください。
 `provider.tf` で、AWS プロファイル `study` を指定しています。
 `aws configure --profile study` などで、事前に同名のプロファイルを作成してください。
 別の名前を使う場合は、`provider.tf` の `profile` を書き換えてください。
+
+### モジュールの構成
+
+modules: https://github.com/kenichi-oss/RaiseTech/tree/feature/terraform-migration/terraform-aws-study/modules
+セキュリティグループの定義: https://github.com/kenichi-oss/RaiseTech/blob/feature/terraform-migration/terraform-aws-study/modules/security_group/main.tf
+envs から modules を呼び出している箇所: https://github.com/kenichi-oss/RaiseTech/blob/feature/terraform-migration/terraform-aws-study/envs/development/main.tf
