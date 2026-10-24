@@ -1,6 +1,10 @@
-# AWS に接続せずにテストするための、偽の AWS プロバイダ
-mock_provider "aws" {}
-
+mock_provider "aws" {
+  mock_data "aws_availability_zones" {
+    defaults = {
+      names = ["ap-northeast-1a", "ap-northeast-1c", "ap-northeast-1d"]
+    }
+  }
+}
 # 必須の変数に、値を渡す(CI には terraform.tfvars が無いため)
 variables {
   region               = "ap-northeast-1"
