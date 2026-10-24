@@ -13,5 +13,5 @@ output "storage_type" {
 }
 output "engine" {
   value = module.rds.engine
-} 
+}
 

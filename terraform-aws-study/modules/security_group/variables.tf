@@ -11,6 +11,6 @@ variable "private_subnet_ids" {
 }
 
 variable "env" {
-      description = "Environment name"
-      type        = string
+  description = "Environment name"
+  type        = string
 }

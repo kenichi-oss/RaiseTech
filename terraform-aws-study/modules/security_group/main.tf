@@ -4,7 +4,7 @@
 resource "aws_security_group" "alb" {
   name        = "${var.env}-alb-sg"
   description = "ALB"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -36,13 +36,13 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ec2" {
   name        = "${var.env}-ec2-sg"
   description = "EC2"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080  
-    protocol    = "tcp"
-    security_groups = [aws_security_group.alb.id]#alb からのみアクセス。
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id] #alb からのみアクセス。
   }
 
   egress {
@@ -61,23 +61,23 @@ resource "aws_security_group" "ec2" {
 resource "aws_security_group" "rds" {
   name        = "${var.env}-rds-sg"
   description = "RDS"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    security_groups = [aws_security_group.ec2.id]#ec2からのみアクセス。
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2.id] #ec2からのみアクセス。
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-    tags = {
-        Name = "${var.env}-rds-sg"
-    }   
+  tags = {
+    Name = "${var.env}-rds-sg"
+  }
 }

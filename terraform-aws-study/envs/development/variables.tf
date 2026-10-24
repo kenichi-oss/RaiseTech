@@ -1,5 +1,5 @@
 variable "region" {
-  type    = string
+  type = string
 }
 
 variable "env" {
@@ -19,11 +19,11 @@ variable "public_subnet_cidrs" {
 }
 
 variable "private_subnet_cidrs" {
-  type = list(string) 
+  type = list(string)
 }
 # IAM
 variable "project_name" {
-  type = string
+  type    = string
   default = "my-app"
 }
 # RDS
@@ -39,7 +39,7 @@ variable "db_username" {
 
 variable "db_password" {
   type      = string
-  sensitive = true   # plan / apply の表示でも隠れる
+  sensitive = true # plan / apply の表示でも隠れる
 }
 
 #variable "instance_class" {
