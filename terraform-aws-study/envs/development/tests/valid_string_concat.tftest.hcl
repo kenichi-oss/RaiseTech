@@ -6,14 +6,14 @@ run "valid_string_concat_ec2_instance_type" {
   command = plan
 
   assert {
-    condition     = output.ec2_instance_type == "t2.micro"
+    condition     = output.ec2_instance_type == "t3.micro"
     error_message = "EC2 instance type does not match the expected value."
   }
 }
 run "valid_string_concat_rds_storage_type" {
   command = plan
   assert {
-    condition     = output.storage_type == "gp2"
+    condition     = output.storage_type == "gp3"
     error_message = "RDS storage type does not match the expected value."
   }
 }
