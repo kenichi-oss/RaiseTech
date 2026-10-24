@@ -8,3 +8,8 @@
     output "app_log_group_name" {
     value = aws_cloudwatch_log_group.app.name
     }
+
+    output "instance_type" {
+    value = aws_instance.main.instance_type
+    }
+    
