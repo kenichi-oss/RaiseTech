@@ -1,6 +1,5 @@
 provider "aws" {
-  region  = var.region
-  profile = "study"
+  region = var.region
 
   default_tags {
     tags = {

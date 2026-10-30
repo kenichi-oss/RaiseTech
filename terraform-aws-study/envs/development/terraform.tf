@@ -12,7 +12,6 @@ terraform {
     bucket       = "tfstate-study-011528301388"
     key          = "development/terraform.tfstate"
     region       = "ap-northeast-1"
-    profile      = "study"
     use_lockfile = true
     encrypt      = true
   }
