@@ -7,7 +7,7 @@
 
 # 変数ファイル(DB パスワードなどの秘密情報)
 *.tfvars
-*.tfvars.json
+!terraform.tfvars
 
 # クラッシュログ
 crash.log
