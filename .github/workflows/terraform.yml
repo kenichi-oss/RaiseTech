@@ -1,8 +1,10 @@
 name: Terraform CI/CD
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "terraform-aws-study/**"
       - ".github/workflows/terraform.yml"
@@ -17,6 +19,8 @@ env:
 
 jobs:
   ci:
+    # フォークからの PR では Secrets が使えないため除外
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +57,8 @@ jobs:
 
   cd:
     needs: ci
-    if: github.ref == 'refs/heads/main'
+    # main への push のときだけ実行(PR では実行しない)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: development
     concurrency:
