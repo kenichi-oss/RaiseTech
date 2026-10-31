@@ -48,8 +48,8 @@ jobs:
         run: terraform plan -input=false -lock=false
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
-          TF_VAR_notification_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
-          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+          TF_VAR_notification_email: ${{ secrets.ALERT_EMAIL }}
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
 
   cd:
     needs: ci
@@ -81,5 +81,5 @@ jobs:
         run: terraform apply -input=false -auto-approve
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
-          TF_VAR_notification_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
-          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+          TF_VAR_notification_email: ${{ secrets.ALERT_EMAIL }}
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
