@@ -1,0 +1,660 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AWS CloudFormation テンプレート: VPC, ALB, EC2, RDS, WAF, CloudWatch Alarm, SNS通知を作成する。
+  詳細構成については、別途で記載。
+Parameters:
+  ProjectName:
+    Type: String 
+    Default: my-app
+    Description: リソース名に付与するプレフィックス
+
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.0.0/24
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.10.0/24
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.11.0/24
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: kenkey0915
+    Description: EC2にSSH接続する際のキーペア名
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+  DBEngine:
+    Type: String
+    Default: mysql
+    AllowedValues: [mysql]
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+
+  DBName:
+    Type: String
+    Default: kenichidb
+
+  DBUsername:
+    Type: String
+    Default: admin
+    NoEcho: true
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: RDSマスターパスワード(8文字以上)
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+
+  AppRepoUrl:
+    Type: String
+    Default: https://github.com/koujienami/aws-study.git
+    Description: EC2起動時にgit cloneするアプリのGitHubリポジトリURL
+
+  NotificationEmail:
+    Type: String
+    Description: アラーム通知の送信先メールアドレス
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: 有効なメールアドレス形式で入力してください
+
+Resources:
+
+  ##########################
+  # VPC
+  ##########################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-igw
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  ##########################
+  # Subnets
+  # パブリック: EC2 / ALB用(2AZ, ALBの要件で2つ以上必要)
+  # プライベート: RDS用(2AZ, DBサブネットグループの要件で2つ以上必要。RDS自体はシングルAZで起動)
+  ##########################
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-public-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-public-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-private-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-private-2
+
+  ##########################
+  # Route Tables
+  # NATゲートウェイは作成しない(コスト削減)。
+  # RDSはEC2(パブリックサブネット)からのみVPC内部通信でアクセスする構成。
+  ##########################
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-private-rt
+
+  PrivateSubnet1RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  ##########################
+  # Security Groups
+  ##########################
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB #ALB用SG - インターネットから80/443を許可
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-alb-sg
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EC2 #EC2用SG - ALBからの8080のみ許可(EC2はパブリックサブネット配置、Spring Boot標準ポート)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ec2-sg
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS #RDS用SG - EC2からの3306のみ許可
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-db-sg
+
+  ##########################
+  # ALB
+  ##########################
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-alb
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-tg
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 8080
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  ##########################
+  # IAM (Session Manager経由でEC2に接続するためのロール)
+  ##########################
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-ssm-role
+      AssumeRolePolicyDocument: # EC2だけがこのロールを引き受けることを許可するポリシー
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore #Session Managerでの接続に必要な操作だけに限定された、AWS公式の専用ポリシー
+          #⇧ここがadmin 権限のAdministratorAccessポリシーだと、EC2に接続したユーザーがAWSアカウント内のすべての操作を実行できてしまうため、セキュリティ上の観点から避けるべきです。
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy   # ← 追加(CloudWatchログ・メトリクス送信に必要)
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SSMInstanceRole
+
+  ##########################
+  # EC2 (単一インスタンス)
+  ##########################
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      
+      Monitoring: false        # ← 明示的にfalse(基本監視=5分間隔・無料)のままにする
+      
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ec2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # 実行ログを /var/log/user-data.log に記録(起動後に確認可能にするため)
+          # 「このスクリプトが今後出力するすべての内容(通常の表示も、エラーメッセージも)を、/var/log/user-data.logというファイルに記録してください」
+          exec > >(tee /var/log/user-data.log) 2>&1
+          
+          # CloudWatch AgentをSSM経由でインストールして起動
+          yum install -y amazon-cloudwatch-agent
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config -m ec2 -s \
+            -c ssm:${CloudWatchAgentConfig}
+
+          # Java 21 (Amazon Corretto, devel版) をインストール
+          dnf install -y java-21-amazon-corretto-devel.x86_64
+          java -version
+
+          # Git と MySQLクライアントをインストール
+          dnf install -y git mariadb105
+          git --version
+
+          # アプリのソースコードをclone(ec2-userの所有物として配置)
+          sudo -u ec2-user git clone ${AppRepoUrl} /home/ec2-user/aws-study
+          
+          #EC2にcloneしたアプリのgradlewに実行権限を付与
+          chmod +x /home/ec2-user/aws-study/gradlew
+
+          # application.properties のDB接続情報を、実際のRDSの値に自動で置き換える
+          PROPS=/home/ec2-user/aws-study/src/main/resources/application.properties
+          if [ -f "$PROPS" ]; then
+            sed -i "s#^spring.datasource.url=.*#spring.datasource.url=jdbc:mysql://${RDSInstance.Endpoint.Address}:3306/${DBName}#" "$PROPS"
+            sed -i "s#^spring.datasource.username=.*#spring.datasource.username=${DBUsername}#" "$PROPS"
+            sed -i "s#^spring.datasource.password=.*#spring.datasource.password=${DBPassword}#" "$PROPS"
+            chown ec2-user:ec2-user "$PROPS"
+          fi
+
+          # create.sql が存在すれば、RDS起動を待ってから自動実行(テーブル作成)
+          SQL_FILE=/home/ec2-user/aws-study/src/main/resources/create.sql
+          if [ -f "$SQL_FILE" ]; then
+            for i in $(seq 1 30); do
+              if mysql -h ${RDSInstance.Endpoint.Address} -u ${DBUsername} -p${DBPassword} ${DBName} -e "SELECT 1" >/dev/null 2>&1; then
+                mysql -h ${RDSInstance.Endpoint.Address} -u ${DBUsername} -p${DBPassword} ${DBName} < "$SQL_FILE"
+                break
+              fi
+              sleep 10
+            done
+          fi
+          # ↓ UserDataに systemdサービス化の処理を追加して、./gradlew bootRun の出力を自動的に app.log へ吐き出すようにする:アプリをsystemdサービス化して自動起動 + ログをファイルに出力
+          cat <<'EOF' > /etc/systemd/system/aws-study.service
+          [Unit]
+          Description=aws-study app
+          After=network.target
+
+          [Service]
+          WorkingDirectory=/home/ec2-user/aws-study
+          ExecStart=/home/ec2-user/aws-study/gradlew bootRun
+          User=ec2-user
+          StandardOutput=append:/home/ec2-user/aws-study/app.log
+          StandardError=append:/home/ec2-user/aws-study/app.log
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable --now aws-study
+  AppLogGroup:  #CloudWatch Logsのロググループを作成(EC2のアプリログ用)
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /${ProjectName}/app
+      RetentionInDays: 1
+
+  UserDataLogGroup:  #CloudWatch Logsのロググループを作成(EC2のUserDataログ用)
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /${ProjectName}/user-data
+      RetentionInDays: 1
+  ##########################
+  # RDS(シングルAZ・単一インスタンス)
+  ##########################
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS #RDS用サブネットグループ(プライベートサブネット、AZ要件のため2つ指定)
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete  #Snapshot を作成せずに削除する場合はDeleteを指定する。Snapshotを作成してから削除する場合はSnapshotを指定する。
+    UpdateReplacePolicy: Delete 
+    Properties:
+      DBInstanceIdentifier: !Sub ${ProjectName}-db
+      Engine: !Ref DBEngine
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      StorageType: gp3
+      BackupRetentionPeriod: 0 #バックアップを無効化。
+      DeleteAutomatedBackups: true #自動バックアップも一緒に削除
+      
+  ##########################
+  # CloudWatch Alarm (EC2のCPU使用率が1%以上でアラーム)
+  ##########################
+  CloudWatchAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      
+      #基本設定
+      AlarmName: CPUAlarm #アラーム名
+      AlarmDescription: CPU alarm for my instance #EC2のCPU使用率が1%以上でアラーム
+      
+      #監視するメトリクスの設定
+      MetricName: CPUUtilization #metric名
+      Unit: Percent #単位
+      Namespace: AWS/EC2 #EC2のCPU使用率を監視するためのnamespace
+      Dimensions: #住所、どのEC2インスタンスのメトリクスを監視するかを指定するための設定
+        - Name: InstanceId
+          Value: !Ref EC2Instance
+
+      #適用する統計値の種類
+      Statistic: Average #適用する統計値の種類(Minimum, Maximum, Average, Sum, SampleCount)
+      Period: 60 #60秒ごとに監視
+
+      #アラームが発動するまでの評価期間
+      Threshold: 1 #しきい値
+      ComparisonOperator: GreaterThanThreshold #比較演算子(しきい値を超えた場合にアラームが発動する)
+      EvaluationPeriods: 1 #アラームが発動するまでの評価期間,評価する期間の数を指定する。1に設定すると、1回の評価期間でアラームが発動する。
+
+      #アラームが発動した場合のアクション
+      AlarmActions:
+        - !Ref MySNSTopic #SNSトピックへの通知
+
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: email #通知の送信先グループを指定している。emailの場合はメールアドレスを指定する。
+          Endpoint: !Ref NotificationEmail #通知の送信先メールアドレス
+
+  CloudWatchAgentConfig: #CloudWatch Agentの設定
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: AmazonCloudWatch-linux-config
+      Type: String
+      Value: !Sub | #変更、!Subを使うことで、CloudFormationのパラメータをSSMパラメータに埋め込むことができる。
+        {
+          "metrics": {
+            "metrics_collected": {
+              "mem": {
+                "measurement": ["mem_used_percent"]
+              },
+              "disk": {
+                "measurement": ["used_percent"],
+                "resources": ["/"]
+              }
+            }
+          },
+          "logs": {                   #CloudWatch Logsの設定
+            "logs_collected": {
+              "files": {
+                "collect_list": [
+                  {
+                    "file_path": "/var/log/user-data.log",
+                    "log_group_name": "/${ProjectName}/user-data",
+                    "log_stream_name": "{instance_id}"
+                  },
+                  {
+                    "file_path": "/home/ec2-user/aws-study/app.log",
+                    "log_group_name": "/${ProjectName}/app",
+                    "log_stream_name": "{instance_id}"
+                  }
+                ]
+              }
+            }
+          }
+        }
+
+  ###########################
+  # WAF　LoadBalancer(ALB)に紐付けて、CloudWatch logsにブロックされたリクエスト件数を出力する。
+  ###########################
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub ${ProjectName}-waf
+      Scope: REGIONAL  # ALBに紐付けるので REGIONAL
+      Description: only AWSManagedRulesCommonRuleSet #最小構成のWAF(CommonRuleSetのみ)
+      DefaultAction:
+        Allow: {}  # ルールに一致しない通常のリクエストは許可
+      VisibilityConfig:
+        SampledRequestsEnabled: true #保存するリクエストのサンプリングを有効化
+        CloudWatchMetricsEnabled: true # アラーム検知に必要なため有効
+        MetricName: !Sub ${ProjectName}-waf-metric
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet #AWSが提供するマネージドルールセット(CommonRuleSet)を使用
+          Priority: 0 #ルールの優先度(1が最優先)
+          OverrideAction: #⬇︎を{}とすることで、マネージドルールの判定結果をそのまま適用することができる
+            None: {} #ルールに一致した場合のアクション(今回はNone=ブロックしない),マネージドルールの判定(Block/Allow)をそのまま適用
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${ProjectName}-waf-rule-metric
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer #ALBのARNを指定
+      WebACLArn: !GetAtt WebACL.Arn #WAFのARNを指定
+  
+  WafLogResourcePolicy: #追加箇所後でチェック。
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: !Sub ${ProjectName}-waf-logs-policy
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "delivery.logs.amazonaws.com" },
+              "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+              "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${ProjectName}:*",
+              "Condition": {
+                "StringEquals": { "aws:SourceAccount": "${AWS::AccountId}" }
+              }
+            }
+          ]
+        }
+   # Web ACLとロググループを紐付ける(これがないとログは出ない)
+  WafLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub aws-waf-logs-${ProjectName}  # 必ず aws-waf-logs- で始める
+      RetentionInDays: 7  # 学習用なので短めに
+  
+  WafLoggingConfig:
+    Type: AWS::WAFv2::LoggingConfiguration
+    DependsOn: 
+      - WafLogResourcePolicy
+      - WafLogGroup
+    Properties:
+      ResourceArn: !GetAtt WebACL.Arn  # ALBではなくWeb ACLのARN
+      LogDestinationConfigs:
+        # 末尾に :* を付けないARN
+        - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${ProjectName}
+
+  WafBlockRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: WAFBlockRequestsAlarm
+      AlarmDescription: WAF Blocked Requests Alarm #WAFでブロックされたリクエストが1件以上発生した場合にアラーム
+      MetricName: BlockedRequests
+      Namespace: AWS/WAFV2
+      Dimensions: #住所、
+        - Name: WebACL #会社、どのWebACLのメトリクスを監視するかを指定
+          Value: !Sub ${ProjectName}-waf
+        - Name: Rule #部署、どのルールのメトリクスを監視するかを指定
+          Value: All #すべての部署、WebACL全体でブロックされた合計件数,個別ルールごとにブロックされた件数を監視すると費用がかかるため、今回はWebACL全体でブロックされた件数を監視する
+        - Name: Region #どのリージョンのWAFのメトリクスを監視するかを指定
+          Value: !Ref AWS::Region
+      Statistic: Sum
+      Period: 300 #5分ごとに監視
+      EvaluationPeriods: 1 #これが抜けていた。1回の評価期間でアラームが発動する
+      Threshold: 1 #１件でも検知したら通知
+      ComparisonOperator: GreaterThanThreshold #GreaterThanOrEqualToThreshold  
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref MySNSTopic #SNSトピックへの通知
+
+  AppErrorMetricFilter: #CloudWatch Logsのロググループに対して、ERRORが出た場合にメトリクスを作成するフィルタを作成
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AppLogGroup
+      FilterPattern: '"ERROR"'
+      MetricTransformations:
+        - MetricNamespace: !Sub ${ProjectName}-app
+          MetricName: AppErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  AppErrorAlarm: #CloudWatch Alarmの作成。アプリケーションログにERRORが出た場合に通知するアラーム
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-app-errors
+      AlarmDescription: アプリケーションログにERRORが出た場合に通知
+      Namespace: !Sub ${ProjectName}-app
+      MetricName: AppErrors
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref MySNSTopic
+
+Outputs:
+  VPCId:
+    Value: !Ref VPC
+  ALBDNSName:
+    Description: アプリケーションへのアクセスURL
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  RDSEndpoint:
+    Description: RDSエンドポイント
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
