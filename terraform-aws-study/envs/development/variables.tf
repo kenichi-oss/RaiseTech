@@ -65,3 +65,9 @@ variable "app_repo_url" {
 variable "notification_email" {
   type = string
 }
+
+variable "name" {
+  description = "Name tag override (optional)"
+  type        = string
+  default     = null
+}

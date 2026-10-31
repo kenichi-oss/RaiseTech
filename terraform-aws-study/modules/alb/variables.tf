@@ -17,3 +17,8 @@ variable "alb_sg_id" {
 variable "instance_id" {
   type = string
 }
+
+variable "additional_instance_ids" {
+  type    = map(string)
+  default = {}
+}

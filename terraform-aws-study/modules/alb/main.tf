@@ -20,6 +20,12 @@ resource "aws_lb_target_group" "main" {
     unhealthy_threshold = 3
   }
 }
+resource "aws_lb_target_group_attachment" "additional" {
+  for_each         = var.additional_instance_ids
+  target_group_arn = aws_lb_target_group.main.arn
+  target_id        = each.value
+  port             = 8080
+}
 
 # EC2 をターゲットグループに登録(CloudFormation の Targets に相当)
 resource "aws_lb_target_group_attachment" "main" {

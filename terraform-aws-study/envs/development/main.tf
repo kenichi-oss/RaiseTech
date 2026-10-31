@@ -48,6 +48,22 @@ module "ec2" {
   instance_type         = var.instance_type
 }
 
+module "ec2_web2" {
+  source                = "../../modules/ec2"
+  project_name          = "${var.project_name}-web2"
+  cw_agent_config_name  = "AmazonCloudWatch-linux-config-web2"
+  key_name              = var.key_name
+  subnet_id             = module.vpc.public_subnet_ids[0]
+  ec2_sg_id             = module.security_group.ec2_sg_id
+  instance_profile_name = module.iam.instance_profile_name
+  app_repo_url          = var.app_repo_url
+  db_endpoint           = module.rds.db_endpoint
+  db_name               = var.db_name
+  db_username           = var.db_username
+  db_password           = var.db_password
+  instance_type         = "t3.small"
+}
+
 module "alb" {
   source            = "../../modules/alb"
   project_name      = var.project_name
@@ -55,6 +71,9 @@ module "alb" {
   public_subnet_ids = module.vpc.public_subnet_ids
   alb_sg_id         = module.security_group.alb_sg_id
   instance_id       = module.ec2.instance_id
+  additional_instance_ids = {
+    web2 = module.ec2_web2.instance_id
+  }
 }
 
 module "waf" {

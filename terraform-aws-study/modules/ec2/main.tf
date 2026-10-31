@@ -22,7 +22,7 @@ resource "aws_cloudwatch_log_group" "user_data" {
 
 # --- CloudWatch Agent の設定(SSM パラメータ) ---
 resource "aws_ssm_parameter" "cw_agent" {
-  name = "AmazonCloudWatch-linux-config"
+  name = var.cw_agent_config_name
   type = "String"
 
   # jsonencode を使うと、JSON の文法を Terraform が正しく作ってくれる

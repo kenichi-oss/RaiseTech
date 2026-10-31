@@ -44,3 +44,9 @@ variable "instance_type" {
   description = "EC2 instance type"
   type        = string
 }
+
+variable "cw_agent_config_name" {
+  description = "SSM parameter name for CloudWatch Agent config"
+  type        = string
+  default     = "AmazonCloudWatch-linux-config"
+}
