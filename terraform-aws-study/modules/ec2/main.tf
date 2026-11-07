@@ -81,6 +81,7 @@ resource "aws_instance" "main" {
       db_name      = var.db_name
       db_username  = var.db_username
       db_password  = var.db_password
+      run_db_init  = var.run_db_init
     })
   })
 

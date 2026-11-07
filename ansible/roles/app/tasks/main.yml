@@ -34,20 +34,30 @@
     path: "{{ app_dir }}/src/main/resources/create.sql"
   register: create_sql
 
-- name: Wait for RDS and run create.sql (first time only)
-  ansible.builtin.shell: >
-    mysql -h {{ db_endpoint }} -u {{ db_username }} {{ db_name }}
-    < {{ app_dir }}/src/main/resources/create.sql
-    && touch /var/lib/aws-study-db-initialized
-  args:
-    creates: /var/lib/aws-study-db-initialized
+- name: Count tables in DB (waits for RDS)
+  ansible.builtin.shell: |
+    mysql -h {{ db_endpoint }} -u {{ db_username }} -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ db_name }}'"
   environment:
     MYSQL_PWD: "{{ db_password }}"
-  register: sql_result
-  until: sql_result.rc == 0
+  register: table_count
+  until: table_count.rc == 0
   retries: 30
   delay: 10
-  when: create_sql.stat.exists
+  changed_when: false
+  when:
+    - run_db_init | default(true) | bool
+    - create_sql.stat.exists
+  no_log: true
+
+- name: Run create.sql only on an empty DB
+  ansible.builtin.shell: |
+    mysql -h {{ db_endpoint }} -u {{ db_username }} {{ db_name }} < {{ app_dir }}/src/main/resources/create.sql
+  environment:
+    MYSQL_PWD: "{{ db_password }}"
+  when:
+    - run_db_init | default(true) | bool
+    - create_sql.stat.exists
+    - (table_count.stdout | default('x') | trim) == '0'
   no_log: true
 
 - name: Install systemd unit

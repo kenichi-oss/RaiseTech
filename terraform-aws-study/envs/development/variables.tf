@@ -12,7 +12,7 @@ variable "vpc_cidr" {
 
 variable "instance_type" {
   type    = string
-  default = "t3.micro"
+  default = "t3.small"
 }
 variable "public_subnet_cidrs" {
   type = list(string)

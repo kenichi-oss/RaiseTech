@@ -59,3 +59,9 @@ variable "ansible_repo_branch" {
   type    = string
   default = "feature/ansible" # main にマージする前に "main" へ戻す
 }
+
+variable "run_db_init" {
+  description = "Run create.sql from this instance (only one instance should do this)"
+  type        = bool
+  default     = true
+}
