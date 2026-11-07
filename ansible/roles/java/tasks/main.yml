@@ -1,0 +1,14 @@
+---
+- name: Install Java 21 (Corretto)
+  ansible.builtin.dnf:
+    name: java-21-amazon-corretto-devel
+    state: present
+
+- name: Check Java version
+  ansible.builtin.command: java -version
+  register: java_version
+  changed_when: false
+
+- name: Show Java version
+  ansible.builtin.debug:
+    msg: "{{ java_version.stderr_lines }}"

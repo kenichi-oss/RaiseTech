@@ -5,6 +5,7 @@ on:
   pull_request:               # PR を作った・更新したときに動く
     paths:
       - "terraform-aws-study/**"   # このフォルダを変更したときだけ
+      - "ansible/**"
 
 jobs:
   hello:

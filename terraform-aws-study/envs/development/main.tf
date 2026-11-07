@@ -62,6 +62,7 @@ module "ec2_web2" {
   db_username           = var.db_username
   db_password           = var.db_password
   instance_type         = "t3.small"
+  run_db_init           = false
 }
 
 module "alb" {

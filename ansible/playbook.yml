@@ -1,0 +1,8 @@
+---
+- name: Setup aws-study app
+  hosts: localhost
+  connection: local
+  become: true
+  roles:
+    - java
+    - app
