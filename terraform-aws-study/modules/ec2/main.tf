@@ -1,3 +1,8 @@
+locals {
+  ansible_dir  = "${path.module}/../../../ansible"
+  ansible_hash = sha1(join("", [for f in sort(fileset(local.ansible_dir, "**")) : filesha1("${local.ansible_dir}/${f}")]))
+}
+
 # 最新の Amazon Linux 2023 の AMI を取得
 data "aws_ami" "al2023" {
   most_recent = true
@@ -56,21 +61,27 @@ resource "aws_ssm_parameter" "cw_agent" {
 
 # --- EC2 本体 ---
 resource "aws_instance" "main" {
-  ami                    = data.aws_ami.al2023.id
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  subnet_id              = var.subnet_id
-  vpc_security_group_ids = [var.ec2_sg_id]
-  iam_instance_profile   = var.instance_profile_name
-  monitoring             = false
+  ami                         = data.aws_ami.al2023.id
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  subnet_id                   = var.subnet_id
+  vpc_security_group_ids      = [var.ec2_sg_id]
+  iam_instance_profile        = var.instance_profile_name
+  monitoring                  = false
+  user_data_replace_on_change = true
 
   user_data = templatefile("${path.module}/user_data.sh.tpl", {
     cw_agent_config_name = aws_ssm_parameter.cw_agent.name
-    app_repo_url         = var.app_repo_url
-    db_endpoint          = var.db_endpoint
-    db_name              = var.db_name
-    db_username          = var.db_username
-    db_password          = var.db_password
+    ansible_repo_url     = var.ansible_repo_url
+    ansible_repo_branch  = var.ansible_repo_branch
+    ansible_hash         = local.ansible_hash
+    ansible_vars_json = jsonencode({
+      app_repo_url = var.app_repo_url
+      db_endpoint  = var.db_endpoint
+      db_name      = var.db_name
+      db_username  = var.db_username
+      db_password  = var.db_password
+    })
   })
 
   tags = {

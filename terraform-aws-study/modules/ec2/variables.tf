@@ -50,3 +50,12 @@ variable "cw_agent_config_name" {
   type        = string
   default     = "AmazonCloudWatch-linux-config"
 }
+variable "ansible_repo_url" {
+  type    = string
+  default = "https://github.com/kenichi-oss/RaiseTech.git"
+}
+
+variable "ansible_repo_branch" {
+  type    = string
+  default = "feature/ansible" # main にマージする前に "main" へ戻す
+}

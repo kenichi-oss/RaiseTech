@@ -1,0 +1,78 @@
+---
+- name: Install git and MariaDB client
+  ansible.builtin.dnf:
+    name:
+      - git
+      - mariadb105
+    state: present
+
+- name: Clone app repository
+  ansible.builtin.git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ app_dir }}"
+    update: false
+  become_user: ec2-user
+
+- name: Make gradlew executable
+  ansible.builtin.file:
+    path: "{{ app_dir }}/gradlew"
+    mode: u+x
+
+- name: Configure DB connection
+  ansible.builtin.lineinfile:
+    path: "{{ app_dir }}/src/main/resources/application.properties"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: spring.datasource.url, value: "jdbc:mysql://{{ db_endpoint }}:3306/{{ db_name }}" }
+    - { key: spring.datasource.username, value: "{{ db_username }}" }
+    - { key: spring.datasource.password, value: "{{ db_password }}" }
+  no_log: true
+
+- name: Check whether create.sql exists
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/src/main/resources/create.sql"
+  register: create_sql
+
+- name: Wait for RDS and run create.sql (first time only)
+  ansible.builtin.shell: >
+    mysql -h {{ db_endpoint }} -u {{ db_username }} {{ db_name }}
+    < {{ app_dir }}/src/main/resources/create.sql
+    && touch /var/lib/aws-study-db-initialized
+  args:
+    creates: /var/lib/aws-study-db-initialized
+  environment:
+    MYSQL_PWD: "{{ db_password }}"
+  register: sql_result
+  until: sql_result.rc == 0
+  retries: 30
+  delay: 10
+  when: create_sql.stat.exists
+  no_log: true
+
+- name: Install systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/aws-study.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=aws-study app
+      After=network.target
+
+      [Service]
+      WorkingDirectory={{ app_dir }}
+      ExecStart={{ app_dir }}/gradlew bootRun
+      User=ec2-user
+      StandardOutput=append:{{ app_dir }}/app.log
+      StandardError=append:{{ app_dir }}/app.log
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start aws-study
+  ansible.builtin.systemd:
+    name: aws-study
+    daemon_reload: true
+    enabled: true
+    state: started
