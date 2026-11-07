@@ -57,7 +57,7 @@ variable "ansible_repo_url" {
 
 variable "ansible_repo_branch" {
   type    = string
-  default = "feature/ansible" # main にマージする前に "main" へ戻す
+  default = "main"
 }
 
 variable "run_db_init" {
